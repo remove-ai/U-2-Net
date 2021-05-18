@@ -12,7 +12,7 @@ from torchvision import transforms#, utils
 import numpy as np
 from PIL import Image
 import glob
-from PIL import Image as Img
+
 from data_loader import RescaleT
 from data_loader import ToTensor
 from data_loader import ToTensorLab
@@ -21,6 +21,7 @@ from data_loader import SalObjDataset
 from model import U2NET # full size version 173.6 MB
 from tensorflow.keras.preprocessing.image import load_img
 from tensorflow.keras.preprocessing.image import img_to_array
+from PIL import Image as Img
 
 
 # normalize the predicted SOD probability map
@@ -33,7 +34,7 @@ def normPRED(d):
     return dn
 
 
-def save_output(image_name,pred,d_dir):
+def save_output(image_name, pred, d_dir):
 
     predict = pred
     predict = predict.squeeze()
@@ -42,29 +43,30 @@ def save_output(image_name,pred,d_dir):
     im = Image.fromarray(predict_np*255).convert('RGB')
     img_name = image_name.split(os.sep)[-1]
     image = io.imread(image_name)
-    imo = im.resize((image.shape[1],image.shape[0]),resample=Image.BILINEAR)
+    imo = im.resize((image.shape[1], image.shape[0]), resample=Image.BILINEAR)
 
     pb_np = np.array(imo)
 
     aaa = img_name.split(".")
     bbb = aaa[0:-1]
     imidx = bbb[0]
-    for i in range(1,len(bbb)):
+    for i in range(1, len(bbb)):
         imidx = imidx + "." + bbb[i]
 
     imo.save(d_dir+imidx+'.png')
 
-def main():
+
+def main(img_name_list):
 
     # --------- 1. get image path and name ---------
-    model_name='u2net'
-
+    model_name = 'u2net'
 
     image_dir = os.path.join(os.getcwd(), 'test_data', 'test_human_images')
     prediction_dir = os.path.join(os.getcwd(), 'test_data', 'test_human_images' + '_results' + os.sep)
     model_dir = os.path.join(os.getcwd(), 'saved_models', model_name+'_human_seg', model_name + '_human_seg.pth')
 
-    img_name_list = glob.glob(image_dir + os.sep + '*')
+    # img_name_list = glob.glob(image_dir + os.sep + '*')
+    # img_name_list = ['/home/azureuser/u2net/U-2-Net/test_data/test_human_images/d.jpg']
     print(img_name_list)
 
     # --------- 2. dataloader ---------
@@ -80,9 +82,9 @@ def main():
                                         num_workers=1)
 
     # --------- 3. model define ---------
-    if(model_name=='u2net'):
+    if model_name == 'u2net':
         print("...load U2NET---173.6 MB")
-        net = U2NET(3,1)
+        net = U2NET(3, 1)
 
     if torch.cuda.is_available():
         net.load_state_dict(torch.load(model_dir))
@@ -104,10 +106,10 @@ def main():
         else:
             inputs_test = Variable(inputs_test)
 
-        d1,d2,d3,d4,d5,d6,d7= net(inputs_test)
+        d1, d2, d3, d4, d5, d6, d7 = net(inputs_test)
 
         # normalization
-        pred = d1[:,0,:,:]
+        pred = d1[:, 0, :, :]
         pred = normPRED(pred)
 
         # save results to test_results folder
@@ -115,10 +117,10 @@ def main():
             os.makedirs(prediction_dir, exist_ok=True)
         save_output(img_name_list[i_test],pred,prediction_dir)
 
-        del d1,d2,d3,d4,d5,d6,d7
+        del d1, d2, d3, d4, d5, d6, d7
 
 
-def process_image_named(name, threshold_cutoff=0.90, use_transparency=False):
+def process_image_named(name, threshold_cutoff=0.90, use_transparency=True):
     result_img = load_img('test_data/test_human_images_results/' + name + '.png')
     # convert result-image to numpy array and rescale(255 for RBG images)
     RESCALE = 255
@@ -159,55 +161,27 @@ def process_image_named(name, threshold_cutoff=0.90, use_transparency=False):
         rem_back = (inp_img * out_img)
         rem_back_scaled = Img.fromarray((rem_back * RESCALE).astype('uint8'), 'RGB')
 
-    # select a layer(can be 0,1 or 2) for bounding box creation and salient map
-    LAYER = 2
-    out_layer = out_img[:, :, LAYER]
-
-    # find the list of points where saliency starts and ends for both axes
-    x_starts = [
-        np.where(out_layer[i] == 1)[0][0] if len(np.where(out_layer[i] == 1)[0]) != 0 else out_layer.shape[0] + 1 for i
-        in range(out_layer.shape[0])]
-    x_ends = [np.where(out_layer[i] == 1)[0][-1] if len(np.where(out_layer[i] == 1)[0]) != 0 else 0 for i in
-              range(out_layer.shape[0])]
-    y_starts = [
-        np.where(out_layer.T[i] == 1)[0][0] if len(np.where(out_layer.T[i] == 1)[0]) != 0 else out_layer.T.shape[0] + 1
-        for i in range(out_layer.T.shape[0])]
-    y_ends = [np.where(out_layer.T[i] == 1)[0][-1] if len(np.where(out_layer.T[i] == 1)[0]) != 0 else 0 for i in
-              range(out_layer.T.shape[0])]
-
-    # get the starting and ending coordinated for the box
-    startx = min(x_starts)
-    endx = max(x_ends)
-    starty = min(y_starts)
-    endy = max(y_ends)
-
-    # show the resulting coordinates
-    start = (startx, starty)
-    end = (endx, endy)
-    print(start, end)
-
-    cropped_rem_back_scaled = rem_back_scaled.crop((startx, starty, endx, endy))
     if use_transparency:
-        cropped_rem_back_scaled.save('test_data/test_humandata_cropped_results/' + name + '_cropped_no-bg.png')
+        rem_back_scaled.save('test_data/test_humandata_cropped_results/' + name + '_cropped_no-bg.png')
     else:
-        cropped_rem_back_scaled.save('test_data/test_humandata_cropped_results/' + name + '_cropped_no-bg.jpg')
-
-    cropped_mask_img = mask_img.crop((startx, starty, endx, endy))
+        rem_back_scaled.save('test_data/test_humandata_cropped_results/' + name + '_cropped_no-bg.jpg')
 
     if use_transparency:
-        cropped_mask_img.save('test_data/test_humandata_cropped_results/' + name + '_cropped_no-bg_mask.png')
+        mask_img.save('test_data/test_humandata_cropped_results/' + name + '_cropped_no-bg_mask.png')
     else:
-        cropped_mask_img.save('test_data/test_humandata_cropped_results/' + name + '_cropped_no-bg_mask.jpg')
+        mask_img.save('test_data/test_humandata_cropped_results/' + name + '_cropped_no-bg_mask.jpg')
 
 
 if __name__ == "__main__":
-    main()
-    image_dir = os.path.join(os.getcwd(), 'test_data/test_human_images_results/*.png')
-    print(image_dir)
-    file_names = glob(image_dir)
-    # print(file_names)
-    names = [os.path.basename(name[:-4]) for name in file_names]
-    print(names)
+    while True:
+        input_string = input('Enter paths separated by space ')
+        main(input_string.split())
+        image_dir = os.path.join(os.getcwd(), 'test_data/test_human_images_results/*.png')
+        print(image_dir)
+        file_names = glob.glob(image_dir)
+        # print(file_names)
+        names = [os.path.basename(name[:-4]) for name in file_names]
+        print(names)
 
-    for name in names:
-        process_image_named(name)
+        for name in names:
+            process_image_named(name)
